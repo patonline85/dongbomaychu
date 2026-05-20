@@ -38,6 +38,17 @@ async def sync_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         process = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         if process.returncode == 0:
             await update.message.reply_text('✅ Đồng bộ Rsync hoàn tất!\n\nCác file đã xử lý:\n' + process.stdout[-700:])
+            # --- [THÊM MỚI] BẮT ĐẦU ĐỒNG BỘ ẢNH TIN TỨC ---
+            await update.message.reply_text(f'📸 Đang quét và đồng bộ Kho ẢNH Tin Tức...')
+            # Lệnh Rsync đồng bộ thư mục uploads từ host_root sang thư mục /root/ máy chủ đích
+            cmd_images = f"rsync -avz --delete -e 'ssh -o StrictHostKeyChecking=no' /host_root/tintuc_uploads/ root@{TARGET_IP}:/root/tintuc_uploads/"
+            
+            img_process = subprocess.run(cmd_images, shell=True, capture_output=True, text=True)
+            if img_process.returncode == 0:
+                await update.message.reply_text('✅ Đã sao lưu trọn bộ Hình ẢNH Tin Tức sang máy dự phòng!')
+            else:
+                await update.message.reply_text(f'⚠️ Lỗi đồng bộ Ảnh Tin Tức:\n{img_process.stderr[-300:]}')
+            # --- KẾT THÚC THÊM MỚI ---
         else:
             await update.message.reply_text(f'❌ Lỗi đồng bộ:\n{process.stderr[-700:]}')
     except Exception as e:
