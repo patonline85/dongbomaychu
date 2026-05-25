@@ -90,12 +90,62 @@ async def clean_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     except Exception as e:
         await update.message.reply_text(f'❌ Lỗi hệ thống khi dọn dẹp: {str(e)}')
 
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Bảo mật: Kiểm tra quyền
+    if update.effective_user.id != ALLOWED_USER_ID:
+        await update.message.reply_text('⛔ Từ chối truy cập. Bạn không có quyền thực thi lệnh này.')
+        return
+
+    await update.message.reply_text('📊 Đang thu thập dữ liệu hệ thống (CPU, RAM, Docker, USB)...')
+    
+    try:
+        # Lấy thông số CPU & RAM (Tương đương htop)
+        cpu_cmd = "top -bn1 | grep 'Cpu(s)'"
+        cpu_info = subprocess.run(cpu_cmd, shell=True, capture_output=True, text=True).stdout.strip()
+        ram_info = subprocess.run("free -h", shell=True, capture_output=True, text=True).stdout.strip()
+        
+        # Lấy thông số Docker (Tương đương ctop)
+        docker_cmd = "docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'"
+        docker_info = subprocess.run(docker_cmd, shell=True, capture_output=True, text=True).stdout.strip()
+        if not docker_info:
+            docker_info = "Không có container nào đang chạy."
+
+        # Lấy thông số Ổ cứng và USB đang kết nối
+        disk_info = subprocess.run("df -h /", shell=True, capture_output=True, text=True).stdout.strip()
+        usb_info = subprocess.run("lsusb", shell=True, capture_output=True, text=True).stdout.strip()
+        if not usb_info:
+            usb_info = "Không tìm thấy thiết bị USB nào."
+
+        # Cấu trúc tin nhắn trả về bằng định dạng HTML (thẻ <pre> giúp giữ nguyên khoảng cách cột)
+        msg = (
+            f"<b>🖥 THÔNG SỐ HỆ THỐNG (HTOP)</b>\n"
+            f"<pre>{cpu_info}\n\n{ram_info}</pre>\n\n"
+            
+            f"<b>🐳 TIẾN TRÌNH DOCKER (CTOP)</b>\n"
+            f"<pre>{docker_info}</pre>\n\n"
+            
+            f"<b>💾 Ổ CỨNG & USB</b>\n"
+            f"<b>Disk (Root):</b>\n<pre>{disk_info}</pre>\n"
+            f"<b>USB Kết nối:</b>\n<pre>{usb_info}</pre>"
+        )
+
+        # Telegram giới hạn 4096 ký tự/tin nhắn, phòng trường hợp log quá dài
+        if len(msg) > 4000:
+            await update.message.reply_text(msg[:4000], parse_mode='HTML')
+            await update.message.reply_text(msg[4000:], parse_mode='HTML')
+        else:
+            await update.message.reply_text(msg, parse_mode='HTML')
+
+    except Exception as e:
+        await update.message.reply_text(f'❌ Lỗi khi đọc thông số: {str(e)}')
+
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     
     # Đăng ký lệnh cho Bot
     app.add_handler(CommandHandler("sync", sync_command))
     app.add_handler(CommandHandler("clean", clean_command))
+    app.add_handler(CommandHandler("status", status_command))
     
     print("Bot Telegram Sync & Clean đã khởi động...")
     app.run_polling()
